@@ -1,6 +1,7 @@
 package types
 
 import (
+	"bytes"
 	"encoding/json"
 
 	. "github.com/tendermint/go-common"
@@ -14,7 +15,8 @@ Tx (Transaction) is an atomic operation on the ledger state.
 
 Account Types:
  - SendTx         Send coins to address
- - AppTx         Send a msg to a contract that runs in the vm
+ - AppTx          Send a msg to a contract that runs in the vm
+ - SignedCobaltTx       Send a Cobalt tx
 */
 
 type Tx interface {
@@ -25,17 +27,20 @@ type Tx interface {
 // Types of Tx implementations
 const (
 	// Account transactions
-	TxTypeSend = byte(0x01)
-	TxTypeApp  = byte(0x02)
+	TxTypeSend               = byte(0x01)
+	TxTypeApp                = byte(0x02)
+	TxTypeBinarySignedCobalt = byte(0x03)
 )
 
-func (_ *SendTx) AssertIsTx() {}
-func (_ *AppTx) AssertIsTx()  {}
+func (_ *SendTx) AssertIsTx()               {}
+func (_ *AppTx) AssertIsTx()                {}
+func (_ *BinarySignedCobaltTx) AssertIsTx() {}
 
 var _ = wire.RegisterInterface(
 	struct{ Tx }{},
 	wire.ConcreteType{&SendTx{}, TxTypeSend},
 	wire.ConcreteType{&AppTx{}, TxTypeApp},
+	wire.ConcreteType{&BinarySignedCobaltTx{}, TxTypeBinarySignedCobalt},
 )
 
 //-----------------------------------------------------------------------------
@@ -121,9 +126,9 @@ func (tx *SendTx) SignBytes(chainID string) []byte {
 	return signBytes
 }
 
-func (tx *SendTx) SetSignature(pubKey crypto.PubKey, sig crypto.Signature) bool {
+func (tx *SendTx) SetSignature(addr []byte, sig crypto.Signature) bool {
 	for i, input := range tx.Inputs {
-		if input.PubKey.Equals(pubKey) {
+		if bytes.Equal(input.Address, addr) {
 			tx.Inputs[i].Signature = sig
 			return true
 		}
@@ -154,14 +159,65 @@ func (tx *AppTx) SignBytes(chainID string) []byte {
 	return signBytes
 }
 
-func (tx *AppTx) SetSignature(pubKey crypto.PubKey, sig crypto.Signature) bool {
-	// TODO
+func (tx *AppTx) SetSignature(sig crypto.Signature) bool {
 	tx.Input.Signature = sig
 	return true
 }
 
 func (tx *AppTx) String() string {
 	return Fmt("AppTx{%v/%v %v %v %X}", tx.Fee, tx.Gas, tx.Type, tx.Input, tx.Data)
+}
+
+//-----------------------------------------------------------------------------
+
+type CobaltTx struct {
+	NormalizedTx *json.RawMessage `json:"cobaltNormalizedRepresentation"`
+	CipherText   []string         `json:"cipherText"`
+	Participants []string         `json:"participants"`
+}
+
+type SignedCobaltTx struct {
+	Transaction CobaltTx `json:"transaction"`
+	Signatures  []string `json:"signatures"`
+}
+
+func (tx *SignedCobaltTx) SignBytes(chainID string) []byte {
+	txJSON, err := json.Marshal(tx.Transaction)
+	if err != nil {
+		panic(err)
+	}
+	return txJSON
+}
+
+func (tx *SignedCobaltTx) SetSignature(name string, sig crypto.Signature) bool {
+	var idx = -1
+	for i, participant := range tx.Transaction.Participants {
+		if participant == name {
+			idx = i
+			break
+		}
+	}
+	if idx == -1 {
+		panic("Couldn't set signature")
+	}
+	if len(tx.Signatures) == 0 {
+		tx.Signatures = make([]string, len(tx.Transaction.Participants))
+	}
+	tx.Signatures[idx] = Fmt("%X", sig.Bytes())
+	return true
+}
+
+func (tx *SignedCobaltTx) String() string {
+	return Fmt("SignedCobaltTx{%v %v}",
+		tx.Transaction.Participants, tx.Signatures)
+}
+
+type BinarySignedCobaltTx struct {
+	Bytes []byte
+}
+
+func (tx *BinarySignedCobaltTx) SignBytes(chainID string) []byte {
+	return tx.Bytes
 }
 
 //-----------------------------------------------------------------------------

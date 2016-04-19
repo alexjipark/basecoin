@@ -1,29 +1,15 @@
-package main
+package types
 
 import (
 	"encoding/json"
 	"fmt"
+	"testing"
+
 	"github.com/tendermint/go-crypto"
 	"github.com/tendermint/go-wire"
 )
 
-type CobaltTx struct {
-	NormalizedTx json.RawMessage `json:"cobaltNormalizedRepresentation"`
-	CipherText   []string        `json:"cipherText"`
-	Participants []string        `json:"participants"`
-}
-
-type SignedCobaltTx struct {
-	Transaction CobaltTx `json:"transaction"`
-	Signatures  []string `json:"signatures"`
-}
-
-func main() {
-	testParseTx()
-	testCodec()
-}
-
-func testCodec() {
+func TestCodec(t *testing.T) {
 	privKey1 := crypto.GenPrivKeySecp256k1()
 	pubKey1 := privKey1.PubKey()
 	privKey1Bytes, pubKey1Bytes := privKey1.Bytes(), pubKey1.Bytes()
@@ -44,7 +30,7 @@ func testCodec() {
 	}
 }
 
-func testParseTx() {
+func TestParseTx(t *testing.T) {
 	example := `{
   "signatures": [
     "304502210098c69c3daf1eb17928c5c9b4b72b0c3b5dc3a1aa30bb15c8c372e086ebb04caa02207334098460b28e636c0a79873e868ce5e58e42d51d5fb98e911e597db79aa798",

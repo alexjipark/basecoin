@@ -1,8 +1,12 @@
 package state
 
 import (
+	"encoding/hex"
+	"encoding/json"
+
 	"github.com/tendermint/basecoin/types"
 	. "github.com/tendermint/go-common"
+	"github.com/tendermint/go-crypto"
 	"github.com/tendermint/go-events"
 	tmsp "github.com/tendermint/tmsp/types"
 )
@@ -159,6 +163,38 @@ func ExecTx(s *State, pgz *types.Plugins, tx types.Tx, isCheckTx bool, evc event
 			state.SetAccount(tx.Input.Address, inAccCopy)
 		}
 		return res
+
+	case *types.BinarySignedCobaltTx:
+		var signedTx = new(types.SignedCobaltTx)
+		err := json.Unmarshal(tx.Bytes, signedTx)
+		if err != nil {
+			panic("Error parsing cobalt tx: " + err.Error()) // XXX Return error code.
+		}
+		if len(signedTx.Transaction.Participants) != len(signedTx.Signatures) {
+			panic("Num particpants & num signatures mismatch") // XXX Return error code.
+		}
+		signBytes := signedTx.SignBytes("") // XXX ChainID
+		//fmt.Println("SIGN BYTES", string(signBytes))
+		for i, entity := range signedTx.Transaction.Participants {
+			acc := state.GetAccount([]byte(entity))
+			if acc == nil {
+				panic("Account does not exist: " + entity) // XXX Return error code.
+			}
+			sigHex := signedTx.Signatures[i]
+			sigBytes, err := hex.DecodeString(sigHex)
+			if err != nil {
+				panic("Error parsing signature hex: " + err.Error()) // XXX Return error code.
+			}
+			sig, err := crypto.ReadSignatureSecp256k1(sigBytes)
+			if err != nil {
+				panic("Error paring signature bytes: " + err.Error()) // XXX Return error code.
+			}
+			// fmt.Println(">>", entity, acc, sigHex, sig)
+			if !acc.PubKey.VerifyBytes(signBytes, sig) {
+				panic("Signature does not validate!") // XXX Return error code
+			}
+		}
+		return tmsp.OK
 
 	default:
 		return tmsp.ErrBaseEncodingError.SetLog("Unknown tx type")

@@ -73,7 +73,7 @@ func (app *Basecoin) SetOption(key string, value string) (log string) {
 			if err != nil {
 				return "Error decoding acc message: " + err.Error()
 			}
-			app.state.SetAccount(acc.PubKey.Address(), acc)
+			app.state.SetAccount([]byte(acc.Name), acc)
 			return "Success"
 		}
 		return "Unrecognized option key " + key
