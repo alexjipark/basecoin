@@ -228,7 +228,6 @@ func testCobalt() {
 	"id": "d64cbbeb-31fe-446a-8017-397696cdf2d0"
 }`)
 
-	// Mutate the validator set.
 	normalizedTxRaw := json.RawMessage(normalizedTx)
 	tx := &types.SignedCobaltTx{
 		Transaction: types.CobaltTx{
