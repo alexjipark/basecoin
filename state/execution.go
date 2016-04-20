@@ -168,30 +168,31 @@ func ExecTx(s *State, pgz *types.Plugins, tx types.Tx, isCheckTx bool, evc event
 		var signedTx = new(types.SignedCobaltTx)
 		err := json.Unmarshal(tx.Bytes, signedTx)
 		if err != nil {
-			panic("Error parsing cobalt tx: " + err.Error()) // XXX Return error code.
+			return tmsp.ErrBaseEncodingError.SetLog("Could not parse tx: " + err.Error())
 		}
 		if len(signedTx.Transaction.Participants) != len(signedTx.Signatures) {
-			panic("Num particpants & num signatures mismatch") // XXX Return error code.
+			return tmsp.ErrBaseEncodingError.SetLog("Num participants != num signatures")
 		}
 		signBytes := signedTx.SignBytes("") // XXX ChainID
 		//fmt.Println("SIGN BYTES", string(signBytes))
 		for i, entity := range signedTx.Transaction.Participants {
 			acc := state.GetAccount([]byte(entity))
 			if acc == nil {
-				panic("Account does not exist: " + entity) // XXX Return error code.
+				return tmsp.ErrBaseUnknownAddress.SetLog(
+					"Account does not exist: " + entity)
 			}
 			sigHex := signedTx.Signatures[i]
 			sigBytes, err := hex.DecodeString(sigHex)
 			if err != nil {
-				panic("Error parsing signature hex: " + err.Error()) // XXX Return error code.
+				return tmsp.ErrBaseEncodingError.SetLog("Error parsing signature hex: " + err.Error())
 			}
 			sig, err := crypto.ReadSignatureSecp256k1(sigBytes)
 			if err != nil {
-				panic("Error paring signature bytes: " + err.Error()) // XXX Return error code.
+				return tmsp.ErrBaseEncodingError.SetLog("Error parsing signature bytes: " + err.Error())
 			}
 			// fmt.Println(">>", entity, acc, sigHex, sig)
 			if !acc.PubKey.VerifyBytes(signBytes, sig) {
-				panic("Signature does not validate!") // XXX Return error code
+				return tmsp.ErrBaseInvalidSignature
 			}
 		}
 		return tmsp.OK
